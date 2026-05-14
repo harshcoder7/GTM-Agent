@@ -1,0 +1,78 @@
+services:
+  deep-research:
+    build:
+      context: ../deep-research-agent-sdr
+    image: gtm-deep-research:latest
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      OPENAI_MODEL: ${OPENAI_FAST_MODEL:-gpt-4o-mini}
+      MAX_RESEARCH_CYCLES: "2"
+      MAX_SEARCH_RESULTS_PER_QUERY: "5"
+      MAX_URLS_TO_SCRAPE_PER_CYCLE: "3"
+    ports:
+      - "8771:8771"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8771/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    networks: [gtm]
+
+  backend:
+    build:
+      context: ./backend
+    image: gtm-backend:latest
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_REASONING_MODEL: ${OPENAI_REASONING_MODEL}
+      OPENAI_FAST_MODEL: ${OPENAI_FAST_MODEL}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      DEEP_RESEARCH_URL: ${DEEP_RESEARCH_URL}
+      APIFY_TOKEN: ${APIFY_TOKEN}
+      APIFY_POSTS_ACTOR: ${APIFY_POSTS_ACTOR}
+      APIFY_PROFILE_ACTOR: ${APIFY_PROFILE_ACTOR}
+      COMPOSIO_API_KEY: ${COMPOSIO_API_KEY}
+      COMPOSIO_ENTITY_ID: ${COMPOSIO_ENTITY_ID}
+      SEND_MODE: ${SEND_MODE}
+      ALLOWLIST_EMAILS: ${ALLOWLIST_EMAILS}
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      DEEP_RESEARCH_CONTAINER: gtmagent-deep-research-1
+    depends_on:
+      deep-research:
+        condition: service_healthy
+    volumes:
+      - gtm-data:/app/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [gtm]
+
+  frontend:
+    build:
+      context: ./frontend
+    image: gtm-frontend:latest
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks: [gtm]
+
+volumes:
+  gtm-data:
+
+networks:
+  gtm:
+    driver: bridge
